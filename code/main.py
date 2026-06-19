@@ -154,3 +154,43 @@ def load_images(images_paths_str: str, dataset_root: Path) -> tuple:
             missing.append(img_id)
     return b64_list, ids, missing, media_types
         
+
+# PROMPT CONSTRUCTION
+
+def build_history_prompt(claim_object: str, user_claim: str, user_history: Optional[dict]) -> str:
+    """Step 1: credibility assessment based on user history"""
+    if user_history:
+        history_text = user_history.get("history_summary", "No summary available")
+        history_flags = user_history.get("history_flags", "none")
+        past_count = user_history.get("past_claim_count", "unknown")
+        rejected = user_history.get("rejected_claim", "unknown")
+    else:
+        history_text = "No prior history available"
+        history_flags = "none"
+        past_count = "0"
+        rejected = "0"
+
+    return f"""You are a claims fraud analyst. Assess this claim's credibility based solely on user history.
+
+Claim object: {claim_object}
+User claim conversation: {user_claim}
+
+User history:
+- Summary: {history_text}
+- Flags: {history_flags}
+- Past claims: {past_count}
+- Rejected claims: {rejected}
+
+Return ONLY a valid JSON object. No markdown, no explanation outside JSON.set
+
+{{
+    "history_risk_level": "<low|medium|high>",
+    "history_risk_flags": ["<flag>", ...],
+    "history_summary": "<1-2 sentence credibility assessment>"
+}}
+
+Allowed history_risk_flags: none, user_history_risk, manual_review_required
+Set high if rejected_claim >= 3 or history_flags indicate fraud.
+Set medium if there is any prior rejection or suspicious patterns.
+Set low if history is clean or user is new."""
+
