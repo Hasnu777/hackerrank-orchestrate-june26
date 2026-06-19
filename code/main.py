@@ -9,6 +9,9 @@ import urllib.error as urlerror
 import urllib.request as urlrequest
 from pathlib import Path
 from typing import Optional
+from dotenv import load_dotenv
+
+load_dotenv()  # Load environment variables from .env file
 
 try:
     import anthropic as _anthropic
@@ -35,4 +38,65 @@ OBJECT_PARTS = {
     "laptop": {"screen", "keyboard", "trackpad", "hinge", "lid", "corner", "port", "base", "body", "unknown"},
     "package": {"box", "package_corner", "package_side", "seal", "label", "contents", "item", "unknown"}
 }
+
+# CACHE FUNCTIONALITY
+
+class Cache:
+    """JSON cache, keyed with SHA256 hashes of the input data to the model, to store and retrieve model responses."""
+
+    def __init__(self, cache_path: Path):
+        self.path = cache_path
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        if cache_path.exists():
+            with open(cache_path, "r", encoding="utf-8") as f:
+                self._data: dict = json.load(f)
+        else:
+            self._data = {}
+
+    def get(self, key: str) -> Optional[dict]:
+        """Retrieve a cached response by key."""
+        return self._data.get(key)
+    
+    def set(self, key: str, value: dict):
+        """Store a response in the cache under the given key."""
+        self._data[key] = value
+        with open(self.path, "w", encoding="utf-8") as f:
+            json.dump(self._data, f, indent=2)
+
+    def __len__(self) -> int:
+        return len(self._data)
+    
+
+def make_cache_key(provider: str, model : str, user_id: str, image_paths_str: str, user_claim: str, claim_object: str) -> str:
+    """Create a SHA256 hash key for caching based on the input parameters."""
+    raw = f"{provider}|{model}|{user_id}|{image_paths_str}|{user_claim}|{claim_object}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+# MODEL INTERACTION
+
+def query_model(prompt: str, images_b64: str, media_types: list, model: str) -> str:
+    """Query the model with the given prompt and images, returning the response text."""
+    if not _HAS_ANTHROPIC:
+        raise ImportError("Anthropic library is required to query the model. Please install it with 'pip install anthropic'.")
+
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise ValueError("ANTHROPIC_API_KEY environment variable is not set." \
+        "Please set it to your Anthropic API key using a .env file, or through PowerShell/Bash.")
+    client = _anthropic.Client(api_key=api_key)
+    content: list = []
+    for b64, mime in zip(images_b64, media_types):
+        content.append({
+            "type": "input_image",
+            "source": {"type": "base64", "media_type": mime, "data": b64}
+        })
+    content.append({"type": "text", "text": prompt})
+    response = client.messages.create(
+        model=model,
+        max_tokens=2048,
+        messages = [{"role": "user", "content": content}]
+    )
+    return response.content[0].text
+    
 
