@@ -108,3 +108,49 @@ def load_csv(path: Path) -> list:
     
 def build_user_history_map(rows: list) -> dict:
     return {r["user_id"]: r for r in rows}
+
+# IMAGE PROCESSING
+
+_EXT_TO_MIME = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".png": "image/png",
+}
+
+
+def _detect_mime(data: bytes) -> Optional[str]:
+    """Detect the MIME type of the given image from magic bytes, ignoring file extension."""
+    if data[:4] == b"RIFF" and data [8:12] == b"WEBP":
+        return "image/webp"
+    elif data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    elif data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    return None
+
+
+def load_images(images_paths_str: str, dataset_root: Path) -> tuple:
+    """Returns (b64_list, image_ids, missing_ids, media_types)."""
+    raw_paths = [p.strip() for p in images_paths_str.split(",") if p.strip()]
+    b64_list = []
+    ids = []
+    missing = []
+    media_types = []
+    for p in raw_paths:
+        img_id = Path(p).stem
+        ids.append(img_id)
+        full = dataset_root / p
+        if full.exists():
+            with open(full, "rb") as f:
+                data = f.read()
+            mime = _detect_mime(data) or _EXT_TO_MIME.get(full.suffix.lower())
+            if mime:
+                b64_list.append(base64.b64encode(data).decode("utf-8"))
+                media_types.append(mime)
+            else:
+                missing.append(img_id)
+        else:
+            missing.append(img_id)
+    return b64_list, ids, missing, media_types
+        
