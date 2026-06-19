@@ -100,3 +100,11 @@ def query_model(prompt: str, images_b64: str, media_types: list, model: str) -> 
     return response.content[0].text
     
 
+# CSV PROCESSING
+
+def load_csv(path: Path) -> list:
+    with open(path, newline="", encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+    
+def build_user_history_map(rows: list) -> dict:
+    return {r["user_id"]: r for r in rows}
