@@ -2,7 +2,11 @@
 .env
 
 # Cache
-code/cache.json
+code/.cache/
+
+# Generated outputs (submitted separately)
+dataset/output.csv
+code/evaluation/evaluation_report.md
 
 # Python
 __pycache__/
